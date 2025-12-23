@@ -32,6 +32,27 @@ class BatteryHealthAnalyzer:
         print("🔋 UAV Battery Health Analysis System")
         print("=" * 80)
     
+    def detect_config_from_rfid(self, rfid):
+        """Detect battery configuration from RFID string"""
+        # Try to extract XS pattern (e.g., 3S, 4S, 6S)
+        import re
+        match = re.search(r'(\d+)S', str(rfid), re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+        return None
+    
+    def detect_config_from_cells(self, row):
+        """Auto-detect configuration by counting active cells with valid voltage"""
+        active_cells = 0
+        for col in self.cell_cols:
+            try:
+                voltage = float(row[col])
+                if voltage > 0 and voltage < 5:  # Valid LiPo cell voltage range
+                    active_cells += 1
+            except (ValueError, TypeError, KeyError):
+                break
+        return active_cells if active_cells > 0 else 4  # Default to 4S if can't detect
+    
     def voltage_to_soc(self, voltage):
         """Convert single cell voltage to State of Charge percentage"""
         if voltage >= self.VOLTAGE_FULL:
@@ -59,13 +80,31 @@ class BatteryHealthAnalyzer:
         self.df['RTC_Time'] = pd.to_datetime(self.df['RTC_Time'])
         self.df = self.df.sort_values(['RFID', 'RTC_Time']).reset_index(drop=True)
         
-        # Extract configuration (number of cells in series)
-        self.df['Config'] = self.df['RFID'].str.extract(r'_(\d+)S_')[0].astype(int)
+        # Auto-detect configuration using multiple methods
+        print("\n🔍 Auto-detecting battery configurations...")
+        configs = {}
+        
+        for rfid in self.df['RFID'].unique():
+            # Method 1: Try to extract from RFID name
+            config = self.detect_config_from_rfid(rfid)
+            
+            # Method 2: If failed, detect from cell data
+            if config is None:
+                sample_row = self.df[self.df['RFID'] == rfid].iloc[0]
+                config = self.detect_config_from_cells(sample_row)
+                print(f"   {rfid}: Auto-detected {config}S from cell data")
+            else:
+                print(f"   {rfid}: Detected {config}S from RFID name")
+            
+            configs[rfid] = config
+        
+        # Assign configurations
+        self.df['Config'] = self.df['RFID'].map(configs)
         
         # Calculate time deltas for each pack
         self.df['Time_Delta'] = self.df.groupby('RFID')['RTC_Time'].diff().dt.total_seconds() / 3600  # hours
         
-        print(f"📦 Found {self.df['RFID'].nunique()} unique battery packs")
+        print(f"\n📦 Found {self.df['RFID'].nunique()} unique battery packs")
         print(f"⚙️ Configurations: {sorted(self.df['Config'].unique())}S")
         
         return self
