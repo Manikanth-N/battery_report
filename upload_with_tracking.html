@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📎 Battery Upload & Global RFID Tracking</title>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .two-column {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .upload-section, .registry-section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .section-title {
+            color: #2c3e50;
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .upload-zone {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px 30px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: #f8f9fa;
+        }
+
+        .upload-zone:hover,
+        .upload-zone.dragover {
+            border-color: #764ba2;
+            background: #e8e9ff;
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 50px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            margin: 5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-small {
+            padding: 8px 15px;
+            font-size: 0.85em;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .registry-list {
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+
+        .rfid-item {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s;
+        }
+
+        .rfid-item:hover {
+            background: #e8e9ff;
+            transform: translateX(5px);
+        }
+
+        .rfid-info {
+            flex: 1;
+        }
+
+        .rfid-id {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 0.95em;
+        }
+
+        .rfid-stats {
+            font-size: 0.8em;
+            color: #7f8c8d;
+            margin-top: 3px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 0.75em;
+            font-weight: 600;
+            margin-left: 5px;
+        }
+
+        .badge-excellent { background: #2ecc71; color: white; }
+        .badge-good { background: #f39c12; color: white; }
+        .badge-fair { background: #e67e22; color: white; }
+        .badge-poor { background: #e74c3c; color: white; }
+        .badge-new { background: #3498db; color: white; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .stat-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 0.85em;
+            margin-top: 5px;
+        }
+
+        .progress-section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 25px;
+            background: #e0e0e0;
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .log {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            max-height: 250px;
+            overflow-y: auto;
+            margin: 15px 0;
+            font-size: 0.85em;
+        }
+
+        .log-line {
+            padding: 3px 0;
+            border-bottom: 1px solid #34495e;
+        }
+
+        .results-section {
+            display: none;
+        }
+
+        .chart-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 0.9em;
+        }
+
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background: #667eea;
+            color: white;
+            font-weight: 600;
+        }
+
+        tr:hover {
+            background: #f5f5f5;
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 15px;
+            margin: 20px 0;
+            justify-content: center;
+        }
+
+        .mode-btn {
+            padding: 12px 30px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .mode-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .mode-btn:hover {
+            transform: scale(1.05);
+        }
+
+        @media (max-width: 1200px) {
+            .two-column {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>📎 Battery Upload & Global RFID Tracking</h1>
+            <p>Upload CSV files with automatic RFID registration and cumulative analysis</p>
+            
+            <!-- Processing Mode Selector -->
+            <div class="mode-selector">
+                <button class="mode-btn active" onclick="setMode('local')" id="localBtn">
+                    💻 Local Analysis (Current Upload Only)
+                </button>
+                <button class="mode-btn" onclick="setMode('cumulative')" id="cumulativeBtn">
+                    🌍 Cumulative Analysis (All History)
+                </button>
+            </div>
+        </div>
+
+        <!-- Two Column Layout -->
+        <div class="two-column">
+            <!-- Upload Section -->
+            <div class="upload-section">
+                <h2 class="section-title">📁 Upload Battery Data</h2>
+                <div class="upload-zone" id="uploadZone">
+                    <div class="upload-icon">📂</div>
+                    <h3>Drag & Drop CSV File</h3>
+                    <p style="margin: 10px 0; color: #7f8c8d;">or</p>
+                    <button class="btn" onclick="document.getElementById('fileInput').click()">
+                        Browse Files
+                    </button>
+                    <input type="file" id="fileInput" accept=".csv" />
+                    <p style="margin-top: 15px; font-size: 0.85em; color: #95a5a6;">
+                        Expected format: RFID, RTC_Time, Total_Voltage, C1-C6
+                    </p>
+                </div>
+
+                <!-- Processing Mode Info -->
+                <div style="margin-top: 20px; padding: 15px; background: #e8f4f8; border-radius: 10px; font-size: 0.9em;">
+                    <strong id="modeInfo">💻 Local Mode:</strong>
+                    <span id="modeDesc">Analyzes only the current upload independently</span>
+                </div>
+            </div>
+
+            <!-- Global Registry Section -->
+            <div class="registry-section">
+                <h2 class="section-title">🌍 Global RFID Registry</h2>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalRFIDs">0</div>
+                        <div class="stat-label">Registered RFIDs</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalUploads">0</div>
+                        <div class="stat-label">Total Uploads</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalReadings">0</div>
+                        <div class="stat-label">Total Readings</div>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin: 15px 0;">
+                    <strong>Tracked Batteries:</strong>
+                    <div>
+                        <button class="btn btn-small btn-success" onclick="exportRegistry()">
+                            💾 Export Registry
+                        </button>
+                        <button class="btn btn-small btn-danger" onclick="clearRegistry()">
+                            🗑️ Clear All
+                        </button>
+                    </div>
+                </div>
+
+                <div class="registry-list" id="registryList">
+                    <p style="text-align: center; color: #7f8c8d; padding: 20px;">
+                        No batteries registered yet. Upload a CSV to start tracking.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress Section -->
+        <div class="progress-section" id="progressSection">
+            <h2>🔄 Processing Data...</h2>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill">0%</div>
+            </div>
+            <div class="log" id="logContainer"></div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="results-section" id="resultsSection">
+            <!-- Stats Cards -->
+            <div class="stats-grid" id="statsGrid"></div>
+
+            <!-- Charts -->
+            <div class="chart-container">
+                <h2>🔋 Battery Health Overview</h2>
+                <div id="chart1"></div>
+            </div>
+
+            <div class="chart-container">
+                <h2>📈 Results Table</h2>
+                <div id="tableContainer"></div>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+                <button class="btn" onclick="downloadResults()">
+                    💾 Download Analysis Results
+                </button>
+                <button class="btn btn-success" onclick="downloadHistory()">
+                    📊 Download Full History
+                </button>
+                <button class="btn" onclick="location.reload()">
+                    🔄 Analyze Another File
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let processingMode = 'local'; // 'local' or 'cumulative'
+        let globalRegistry = {};
+        let currentAnalysis = null;
+        let uploadHistory = [];
+
+        // Initialize from localStorage
+        function initializeRegistry() {
+            const stored = localStorage.getItem('batteryRegistry');
+            if (stored) {
+                try {
+                    globalRegistry = JSON.parse(stored);
+                    updateRegistryDisplay();
+                } catch (e) {
+                    console.error('Failed to load registry:', e);
+                    globalRegistry = {};
+                }
+            }
+
+            const historyStored = localStorage.getItem('uploadHistory');
+            if (historyStored) {
+                try {
+                    uploadHistory = JSON.parse(historyStored);
+                } catch (e) {
+                    uploadHistory = [];
+                }
+            }
+        }
+
+        // Save registry to localStorage
+        function saveRegistry() {
+            localStorage.setItem('batteryRegistry', JSON.stringify(globalRegistry));
+            localStorage.setItem('uploadHistory', JSON.stringify(uploadHistory));
+            updateRegistryDisplay();
+        }
+
+        // Set processing mode
+        function setMode(mode) {
+            processingMode = mode;
+            document.getElementById('localBtn').classList.toggle('active', mode === 'local');
+            document.getElementById('cumulativeBtn').classList.toggle('active', mode === 'cumulative');
+            
+            if (mode === 'local') {
+                document.getElementById('modeInfo').innerHTML = '💻 Local Mode:';
+                document.getElementById('modeDesc').textContent = 'Analyzes only the current upload independently';
+            } else {
+                document.getElementById('modeInfo').innerHTML = '🌍 Cumulative Mode:';
+                document.getElementById('modeDesc').textContent = 'Combines with all previous data for comprehensive analysis';
+            }
+        }
+
+        // Update registry display
+        function updateRegistryDisplay() {
+            const listEl = document.getElementById('registryList');
+            const rfids = Object.keys(globalRegistry);
+            
+            document.getElementById('totalRFIDs').textContent = rfids.length;
+            document.getElementById('totalUploads').textContent = uploadHistory.length;
+            
+            let totalReadings = 0;
+            rfids.forEach(rfid => totalReadings += globalRegistry[rfid].readingCount || 0);
+            document.getElementById('totalReadings').textContent = totalReadings.toLocaleString();
+
+            if (rfids.length === 0) {
+                listEl.innerHTML = '<p style="text-align: center; color: #7f8c8d; padding: 20px;">No batteries registered yet.</p>';
+                return;
+            }
+
+            let html = '';
+            rfids.sort().forEach(rfid => {
+                const data = globalRegistry[rfid];
+                const statusClass = {
+                    '🟢 EXCELLENT': 'badge-excellent',
+                    '🟡 GOOD': 'badge-good',
+                    '🟠 FAIR': 'badge-fair',
+                    '🔴 POOR': 'badge-poor'
+                }[data.lastStatus] || 'badge-new';
+
+                html += `
+                    <div class="rfid-item">
+                        <div class="rfid-info">
+                            <div class="rfid-id">${rfid}</div>
+                            <div class="rfid-stats">
+                                ${data.config}S | ${data.readingCount} readings | Last: ${new Date(data.lastSeen).toLocaleDateString()}
+                                <span class="badge ${statusClass}">${data.lastStatus || 'NEW'}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            listEl.innerHTML = html;
+        }
+
+        // Export registry as JSON
+        function exportRegistry() {
+            const data = {
+                exportDate: new Date().toISOString(),
+                totalRFIDs: Object.keys(globalRegistry).length,
+                totalUploads: uploadHistory.length,
+                registry: globalRegistry,
+                history: uploadHistory
+            };
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `battery_registry_${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+        }
+
+        // Clear registry
+        function clearRegistry() {
+            if (confirm('Are you sure you want to clear all tracked battery data? This cannot be undone.')) {
+                globalRegistry = {};
+                uploadHistory = [];
+                localStorage.removeItem('batteryRegistry');
+                localStorage.removeItem('uploadHistory');
+                updateRegistryDisplay();
+                alert('✅ Registry cleared successfully');
+            }
+        }
+
+        // Setup drag and drop
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFile(files[0]);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleFile(e.target.files[0]);
+        });
+
+        function log(message) {
+            const logContainer = document.getElementById('logContainer');
+            const line = document.createElement('div');
+            line.className = 'log-line';
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logContainer.appendChild(line);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function updateProgress(percent, message) {
+            const progressFill = document.getElementById('progressFill');
+            progressFill.style.width = percent + '%';
+            progressFill.textContent = percent + '%';
+            log(message);
+        }
+
+        function handleFile(file) {
+            if (!file.name.endsWith('.csv')) {
+                alert('⚠️ Please upload a CSV file');
+                return;
+            }
+
+            document.getElementById('progressSection').style.display = 'block';
+            document.getElementById('logContainer').innerHTML = '';
+            updateProgress(10, `📁 Loading: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`);
+
+            Papa.parse(file, {
+                header: true,
+                dynamicTyping: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    updateProgress(30, `✅ Parsed ${results.data.length} rows`);
+                    processData(results.data, file.name);
+                },
+                error: function(error) {
+                    log(`❌ Error: ${error.message}`);
+                }
+            });
+        }
+
+        function voltageToSoc(voltage) {
+            if (voltage >= 4.2) return 100;
+            if (voltage <= 3.3) return 0;
+            if (voltage > 3.7) return 50 + 50 * (voltage - 3.7) / 0.5;
+            return 50 * (voltage - 3.3) / 0.4;
+        }
+
+        function processData(data, filename) {
+            updateProgress(40, `🔬 Analyzing in ${processingMode} mode...`);
+
+            // Register upload
+            uploadHistory.push({
+                timestamp: new Date().toISOString(),
+                filename: filename,
+                rowCount: data.length,
+                mode: processingMode
+            });
+
+            // Combine data if cumulative mode
+            let analysisData = data;
+            if (processingMode === 'cumulative' && Object.keys(globalRegistry).length > 0) {
+                updateProgress(45, '🌍 Merging with historical data...');
+                // In a real system, you'd fetch stored raw data
+                // For now, we process current upload and update registry
+            }
+
+            // Process battery packs
+            const packs = {};
+            const cellCols = ['C1', 'C2', 'C3', 'C4', 'C5', 'C6'];
+            let newRFIDs = [];
+
+            analysisData.forEach(row => {
+                const rfid = row.RFID;
+                if (!rfid) return;
+
+                // Track new RFIDs
+                if (!globalRegistry[rfid]) {
+                    newRFIDs.push(rfid);
+                }
+
+                if (!packs[rfid]) {
+                    const config = parseInt(rfid.match(/(\d+)S/)?.[1] || 3);
+                    packs[rfid] = { readings: [], config };
+                }
+
+                const voltages = cellCols.slice(0, packs[rfid].config)
+                    .map(c => parseFloat(row[c]))
+                    .filter(v => v > 0);
+
+                if (voltages.length > 0) {
+                    const vMax = Math.max(...voltages);
+                    const vMin = Math.min(...voltages);
+                    const vAvg = voltages.reduce((a, b) => a + b, 0) / voltages.length;
+                    const imbalance = vMax - vMin;
+
+                    packs[rfid].readings.push({
+                        time: row.RTC_Time,
+                        totalV: row.Total_Voltage,
+                        vAvg, vMin, vMax, imbalance,
+                        lowVoltage: vMin < 3.5,
+                        criticalVoltage: vMin < 3.3
+                    });
+                }
+            });
+
+            updateProgress(60, `📦 Found ${Object.keys(packs).length} packs (${newRFIDs.length} new RFIDs)`);
+            if (newRFIDs.length > 0) {
+                log(`✨ New RFIDs registered: ${newRFIDs.join(', ')}`);
+            }
+
+            calculateAndDisplay(packs);
+        }
+
+        function calculateAndDisplay(packs) {
+            updateProgress(70, '📈 Computing health metrics...');
+
+            const packStats = [];
+
+            Object.entries(packs).forEach(([rfid, pack]) => {
+                if (pack.readings.length === 0) return;
+
+                const readings = pack.readings;
+                const avgImbalance = readings.reduce((s, r) => s + r.imbalance, 0) / readings.length;
+                const maxImbalance = Math.max(...readings.map(r => r.imbalance));
+                const criticalVEvents = readings.filter(r => r.criticalVoltage).length;
+
+                let cycles = 1;
+                for (let i = 1; i < readings.length; i++) {
+                    if (readings[i].totalV - readings[i-1].totalV < -0.5) cycles++;
+                }
+
+                const initialV = readings.slice(0, Math.min(10, readings.length))
+                    .reduce((s, r) => s + r.vAvg, 0) / Math.min(10, readings.length);
+                const recentV = readings.slice(-Math.min(10, readings.length))
+                    .reduce((s, r) => s + r.vAvg, 0) / Math.min(10, readings.length);
+                const degradation = Math.max(0, ((initialV - recentV) / initialV) * 100);
+
+                let soh = 100;
+                soh -= degradation * 2;
+                soh -= Math.min(avgImbalance * 200, 30);
+                soh -= Math.min(criticalVEvents * 5, 20);
+                soh -= Math.min(cycles * 0.5, 15);
+                soh = Math.max(0, Math.min(100, soh));
+
+                let status, statusClass;
+                if (soh >= 85) {
+                    status = '🟢 EXCELLENT';
+                    statusClass = 'badge-excellent';
+                } else if (soh >= 70) {
+                    status = '🟡 GOOD';
+                    statusClass = 'badge-good';
+                } else if (soh >= 50) {
+                    status = '🟠 FAIR';
+                    statusClass = 'badge-fair';
+                } else {
+                    status = '🔴 POOR';
+                    statusClass = 'badge-poor';
+                }
+
+                // Update global registry
+                globalRegistry[rfid] = {
+                    config: pack.config,
+                    readingCount: (globalRegistry[rfid]?.readingCount || 0) + readings.length,
+                    lastSeen: new Date().toISOString(),
+                    lastStatus: status,
+                    lastSoH: soh.toFixed(1),
+                    lastImbalance: avgImbalance.toFixed(3),
+                    totalCycles: (globalRegistry[rfid]?.totalCycles || 0) + cycles
+                };
+
+                packStats.push({
+                    rfid, config: pack.config, readings: readings.length,
+                    avgImbalance: avgImbalance.toFixed(3),
+                    maxImbalance: maxImbalance.toFixed(3),
+                    criticalVEvents, cycles,
+                    soh: soh.toFixed(1), status, statusClass
+                });
+            });
+
+            saveRegistry();
+            updateProgress(90, `✅ Analysis complete`);
+            displayResults(packStats);
+        }
+
+        function displayResults(packStats) {
+            updateProgress(95, '💡 Generating visualizations...');
+
+            currentAnalysis = packStats;
+
+            const totalPacks = packStats.length;
+            const avgSoh = (packStats.reduce((s, p) => s + parseFloat(p.soh), 0) / totalPacks).toFixed(1);
+            const criticalPacks = packStats.filter(p => parseFloat(p.soh) < 70).length;
+            const totalReadings = packStats.reduce((s, p) => s + p.readings, 0);
+
+            document.getElementById('statsGrid').innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${totalPacks}</div>
+                    <div class="stat-label">Analyzed Packs</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${avgSoh}%</div>
+                    <div class="stat-label">Average SoH</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${criticalPacks}</div>
+                    <div class="stat-label">Need Attention</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${totalReadings}</div>
+                    <div class="stat-label">Readings</div>
+                </div>
+            `;
+
+            createChart(packStats);
+            createTable(packStats);
+
+            updateProgress(100, '🎉 Complete!');
+            
+            setTimeout(() => {
+                document.getElementById('resultsSection').style.display = 'block';
+                document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+            }, 500);
+        }
+
+        function createChart(packStats) {
+            const trace = {
+                x: packStats.map(p => parseFloat(p.avgImbalance)),
+                y: packStats.map(p => parseFloat(p.soh)),
+                mode: 'markers+text',
+                type: 'scatter',
+                text: packStats.map(p => p.rfid),
+                textposition: 'top center',
+                marker: {
+                    size: packStats.map(p => p.cycles / 2 + 8),
+                    color: packStats.map(p => parseFloat(p.soh)),
+                    colorscale: 'RdYlGn',
+                    showscale: true,
+                    colorbar: { title: 'SoH %' }
+                },
+                hovertemplate: '<b>%{text}</b><br>SoH: %{y:.1f}%<br>Imbalance: %{x:.3f}V<extra></extra>'
+            };
+
+            const layout = {
+                title: `Battery Health Analysis (${processingMode === 'cumulative' ? 'Cumulative' : 'Local'} Mode)`,
+                xaxis: { title: 'Avg Imbalance (V)' },
+                yaxis: { title: 'SoH (%)' },
+                hovermode: 'closest',
+                height: 500
+            };
+
+            Plotly.newPlot('chart1', [trace], layout);
+        }
+
+        function createTable(packStats) {
+            const sorted = [...packStats].sort((a, b) => parseFloat(a.soh) - parseFloat(b.soh));
+            
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>RFID</th>
+                            <th>Config</th>
+                            <th>SoH %</th>
+                            <th>Status</th>
+                            <th>Avg Imbalance</th>
+                            <th>Cycles</th>
+                            <th>Critical Events</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            sorted.forEach(pack => {
+                html += `
+                    <tr>
+                        <td><strong>${pack.rfid}</strong></td>
+                        <td>${pack.config}S</td>
+                        <td><strong>${pack.soh}%</strong></td>
+                        <td><span class="badge ${pack.statusClass}">${pack.status}</span></td>
+                        <td>${pack.avgImbalance}V</td>
+                        <td>${pack.cycles}</td>
+                        <td>${pack.criticalVEvents}</td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            document.getElementById('tableContainer').innerHTML = html;
+        }
+
+        function downloadResults() {
+            if (!currentAnalysis) return;
+            
+            let csv = 'RFID,Config,SoH_Percent,Status,Avg_Imbalance,Cycles,Critical_Events\n';
+            currentAnalysis.forEach(p => {
+                csv += `${p.rfid},${p.config},${p.soh},${p.status},${p.avgImbalance},${p.cycles},${p.criticalVEvents}\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `analysis_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+        }
+
+        function downloadHistory() {
+            let csv = 'RFID,Config,Total_Readings,Last_Seen,Last_SoH,Last_Status,Total_Cycles\n';
+            
+            Object.entries(globalRegistry).forEach(([rfid, data]) => {
+                csv += `${rfid},${data.config}S,${data.readingCount},${new Date(data.lastSeen).toLocaleString()},${data.lastSoH}%,${data.lastStatus},${data.totalCycles}\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `battery_history_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', initializeRegistry);
+    </script>
+</body>
+</html>
