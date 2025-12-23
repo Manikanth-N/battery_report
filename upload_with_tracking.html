@@ -490,27 +490,49 @@
             }
         }
 
-        // Detect battery configuration from RFID
-        function detectConfig(rfid) {
-            // Try to extract XS pattern (e.g., 3S, 4S, 6S, 12S)
-            const match = rfid.match(/(\d+)S/i);
-            if (match) {
-                return parseInt(match[1]);
+        // Detect battery configuration from RFID or actual cell data
+        function detectConfig(rfid, sampleRow = null) {
+            // Method 1: Try to extract from RFID string (e.g., PACK_6S_001, 6S_Battery)
+            const matchRFID = rfid.match(/(\d+)S/i);
+            if (matchRFID) {
+                const config = parseInt(matchRFID[1]);
+                log(`🔍 ${rfid}: Detected ${config}S from RFID name`);
+                return config;
             }
             
-            // Fallback: try to detect from common patterns
-            if (rfid.includes('1S')) return 1;
-            if (rfid.includes('2S')) return 2;
-            if (rfid.includes('3S')) return 3;
-            if (rfid.includes('4S')) return 4;
-            if (rfid.includes('5S')) return 5;
-            if (rfid.includes('6S')) return 6;
-            if (rfid.includes('8S')) return 8;
-            if (rfid.includes('10S')) return 10;
-            if (rfid.includes('12S')) return 12;
+            // Method 2: Auto-detect from actual cell data (NEW!)
+            if (sampleRow) {
+                const cellCols = ['C1', 'C2', 'C3', 'C4', 'C5', 'C6'];
+                let activeCells = 0;
+                
+                for (let i = 0; i < cellCols.length; i++) {
+                    const voltage = parseFloat(sampleRow[cellCols[i]]);
+                    if (voltage && voltage > 0 && voltage < 5) {  // Valid LiPo cell voltage range
+                        activeCells = i + 1;  // Count up to last valid cell
+                    }
+                }
+                
+                if (activeCells > 0) {
+                    log(`🔍 ${rfid}: Auto-detected ${activeCells}S from cell data (C1-C${activeCells} active)`);
+                    return activeCells;
+                }
+            }
+            
+            // Method 3: Fallback - check for common patterns in RFID
+            const patterns = {
+                '1S': 1, '2S': 2, '3S': 3, '4S': 4, '5S': 5, 
+                '6S': 6, '8S': 8, '10S': 10, '12S': 12
+            };
+            
+            for (const [pattern, config] of Object.entries(patterns)) {
+                if (rfid.toUpperCase().includes(pattern)) {
+                    log(`🔍 ${rfid}: Detected ${config}S from pattern match`);
+                    return config;
+                }
+            }
             
             // Default fallback
-            console.warn(`Could not detect config for ${rfid}, defaulting to 4S`);
+            log(`⚠️ ${rfid}: Could not detect config, defaulting to 4S`);
             return 4;
         }
 
@@ -598,7 +620,8 @@
 
         uploadZone.addEventListener('dragleave', () => {
             uploadZone.classList.remove('dragover');
-        });
+        }
+        );
 
         uploadZone.addEventListener('drop', (e) => {
             e.preventDefault();
@@ -681,7 +704,6 @@
             const packs = {};
             const cellCols = ['C1', 'C2', 'C3', 'C4', 'C5', 'C6'];
             let newRFIDs = [];
-            let configDetections = {};
 
             analysisData.forEach(row => {
                 const rfid = row.RFID;
@@ -693,11 +715,9 @@
                 }
 
                 if (!packs[rfid]) {
-                    // Use improved config detection
-                    const config = detectConfig(rfid);
+                    // Use improved config detection with sample row for auto-detection
+                    const config = detectConfig(rfid, row);
                     packs[rfid] = { readings: [], config };
-                    configDetections[rfid] = config;
-                    log(`🔍 Detected ${rfid}: ${config}S configuration`);
                 }
 
                 const voltages = cellCols.slice(0, packs[rfid].config)
