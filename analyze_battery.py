@@ -32,15 +32,6 @@ class BatteryHealthAnalyzer:
         print("🔋 UAV Battery Health Analysis System")
         print("=" * 80)
     
-    def detect_config_from_rfid(self, rfid):
-        """Detect battery configuration from RFID string"""
-        # Try to extract XS pattern (e.g., 3S, 4S, 6S)
-        import re
-        match = re.search(r'(\d+)S', str(rfid), re.IGNORECASE)
-        if match:
-            return int(match.group(1))
-        return None
-    
     def detect_config_from_cells(self, row):
         """Auto-detect configuration by counting active cells with valid voltage"""
         active_cells = 0
@@ -80,23 +71,15 @@ class BatteryHealthAnalyzer:
         self.df['RTC_Time'] = pd.to_datetime(self.df['RTC_Time'])
         self.df = self.df.sort_values(['RFID', 'RTC_Time']).reset_index(drop=True)
         
-        # Auto-detect configuration using multiple methods
-        print("\n🔍 Auto-detecting battery configurations...")
+        # Auto-detect configuration from cell data only
+        print("\n🔍 Auto-detecting battery configurations from cell data...")
         configs = {}
         
         for rfid in self.df['RFID'].unique():
-            # Method 1: Try to extract from RFID name
-            config = self.detect_config_from_rfid(rfid)
-            
-            # Method 2: If failed, detect from cell data
-            if config is None:
-                sample_row = self.df[self.df['RFID'] == rfid].iloc[0]
-                config = self.detect_config_from_cells(sample_row)
-                print(f"   {rfid}: Auto-detected {config}S from cell data")
-            else:
-                print(f"   {rfid}: Detected {config}S from RFID name")
-            
+            sample_row = self.df[self.df['RFID'] == rfid].iloc[0]
+            config = self.detect_config_from_cells(sample_row)
             configs[rfid] = config
+            print(f"   {rfid}: {config}S (detected from active cells)")
         
         # Assign configurations
         self.df['Config'] = self.df['RFID'].map(configs)
