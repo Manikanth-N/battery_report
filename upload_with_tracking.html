@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>📎 Battery Upload & Global RFID Tracking</title>
+    <title>📎 Battery Upload & Global Battery ID Tracking</title>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
@@ -264,7 +264,7 @@
             width: 100%;
             border-collapse: collapse;
             margin: 15px 0;
-            font-size: 0.9em;
+            font-size: 0.85em;
         }
 
         th, td {
@@ -277,6 +277,7 @@
             background: #667eea;
             color: white;
             font-weight: 600;
+            font-size: 0.9em;
         }
 
         tr:hover {
@@ -321,8 +322,8 @@
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <h1>📎 Battery Upload & Global RFID Tracking</h1>
-            <p>Upload CSV files with automatic RFID registration and cumulative analysis</p>
+            <h1>📎 Battery Upload & Global Battery ID Tracking</h1>
+            <p>Upload CSV files with automatic Battery ID registration and cumulative analysis</p>
             
             <!-- Processing Mode Selector -->
             <div class="mode-selector">
@@ -362,12 +363,12 @@
 
             <!-- Global Registry Section -->
             <div class="registry-section">
-                <h2 class="section-title">🌍 Global RFID Registry</h2>
+                <h2 class="section-title">🌍 Global Battery Registry</h2>
                 
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-value" id="totalRFIDs">0</div>
-                        <div class="stat-label">Registered RFIDs</div>
+                        <div class="stat-label">Registered Batteries</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-value" id="totalUploads">0</div>
@@ -429,7 +430,7 @@
                     💾 Download Analysis Results
                 </button>
                 <button class="btn btn-success" onclick="downloadHistory()">
-                    📊 Download Full History
+                    📈 Download Full History
                 </button>
                 <button class="btn" onclick="location.reload()">
                     🔄 Analyze Another File
@@ -490,17 +491,9 @@
             }
         }
 
-        // Detect battery configuration from RFID or actual cell data
+        // Detect battery configuration from actual cell data ONLY
         function detectConfig(rfid, sampleRow = null) {
-            // Method 1: Try to extract from RFID string (e.g., PACK_6S_001, 6S_Battery)
-            const matchRFID = rfid.match(/(\d+)S/i);
-            if (matchRFID) {
-                const config = parseInt(matchRFID[1]);
-                log(`🔍 ${rfid}: Detected ${config}S from RFID name`);
-                return config;
-            }
-            
-            // Method 2: Auto-detect from actual cell data (NEW!)
+            // Auto-detect from actual cell data
             if (sampleRow) {
                 const cellCols = ['C1', 'C2', 'C3', 'C4', 'C5', 'C6'];
                 let activeCells = 0;
@@ -515,19 +508,6 @@
                 if (activeCells > 0) {
                     log(`🔍 ${rfid}: Auto-detected ${activeCells}S from cell data (C1-C${activeCells} active)`);
                     return activeCells;
-                }
-            }
-            
-            // Method 3: Fallback - check for common patterns in RFID
-            const patterns = {
-                '1S': 1, '2S': 2, '3S': 3, '4S': 4, '5S': 5, 
-                '6S': 6, '8S': 8, '10S': 10, '12S': 12
-            };
-            
-            for (const [pattern, config] of Object.entries(patterns)) {
-                if (rfid.toUpperCase().includes(pattern)) {
-                    log(`🔍 ${rfid}: Detected ${config}S from pattern match`);
-                    return config;
                 }
             }
             
@@ -583,7 +563,7 @@
         function exportRegistry() {
             const data = {
                 exportDate: new Date().toISOString(),
-                totalRFIDs: Object.keys(globalRegistry).length,
+                totalBatteries: Object.keys(globalRegistry).length,
                 totalUploads: uploadHistory.length,
                 registry: globalRegistry,
                 history: uploadHistory
@@ -696,8 +676,6 @@
             let analysisData = data;
             if (processingMode === 'cumulative' && Object.keys(globalRegistry).length > 0) {
                 updateProgress(45, '🌍 Merging with historical data...');
-                // In a real system, you'd fetch stored raw data
-                // For now, we process current upload and update registry
             }
 
             // Process battery packs
@@ -715,7 +693,7 @@
                 }
 
                 if (!packs[rfid]) {
-                    // Use improved config detection with sample row for auto-detection
+                    // Use cell data auto-detection
                     const config = detectConfig(rfid, row);
                     packs[rfid] = { readings: [], config };
                 }
@@ -740,9 +718,9 @@
                 }
             });
 
-            updateProgress(60, `📦 Found ${Object.keys(packs).length} packs (${newRFIDs.length} new RFIDs)`);
+            updateProgress(60, `📦 Found ${Object.keys(packs).length} packs (${newRFIDs.length} new Battery IDs)`);
             if (newRFIDs.length > 0) {
-                log(`✨ New RFIDs registered: ${newRFIDs.join(', ')}`);
+                log(`✨ New Battery IDs registered: ${newRFIDs.join(', ')}`);
             }
 
             calculateAndDisplay(packs);
@@ -760,6 +738,8 @@
                 const avgImbalance = readings.reduce((s, r) => s + r.imbalance, 0) / readings.length;
                 const maxImbalance = Math.max(...readings.map(r => r.imbalance));
                 const criticalVEvents = readings.filter(r => r.criticalVoltage).length;
+                const minVoltage = Math.min(...readings.map(r => r.vMin));
+                const maxVoltage = Math.max(...readings.map(r => r.vMax));
 
                 let cycles = 1;
                 for (let i = 1; i < readings.length; i++) {
@@ -809,6 +789,8 @@
                     rfid, config: pack.config, readings: readings.length,
                     avgImbalance: avgImbalance.toFixed(3),
                     maxImbalance: maxImbalance.toFixed(3),
+                    minVoltage: minVoltage.toFixed(2),
+                    maxVoltage: maxVoltage.toFixed(2),
                     criticalVEvents, cycles,
                     soh: soh.toFixed(1), status, statusClass
                 });
@@ -895,10 +877,12 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>RFID</th>
+                            <th>Battery ID</th>
                             <th>Config</th>
                             <th>SoH %</th>
                             <th>Status</th>
+                            <th>Min V</th>
+                            <th>Max V</th>
                             <th>Avg Imbalance</th>
                             <th>Cycles</th>
                             <th>Critical Events</th>
@@ -914,6 +898,8 @@
                         <td>${pack.config}S</td>
                         <td><strong>${pack.soh}%</strong></td>
                         <td><span class="badge ${pack.statusClass}">${pack.status}</span></td>
+                        <td>${pack.minVoltage}V</td>
+                        <td>${pack.maxVoltage}V</td>
                         <td>${pack.avgImbalance}V</td>
                         <td>${pack.cycles}</td>
                         <td>${pack.criticalVEvents}</td>
@@ -928,9 +914,9 @@
         function downloadResults() {
             if (!currentAnalysis) return;
             
-            let csv = 'RFID,Config,SoH_Percent,Status,Avg_Imbalance,Cycles,Critical_Events\n';
+            let csv = 'Battery_ID,Config,SoH_Percent,Status,Min_Voltage,Max_Voltage,Avg_Imbalance,Cycles,Critical_Events\n';
             currentAnalysis.forEach(p => {
-                csv += `${p.rfid},${p.config},${p.soh},${p.status},${p.avgImbalance},${p.cycles},${p.criticalVEvents}\n`;
+                csv += `${p.rfid},${p.config},${p.soh},${p.status},${p.minVoltage},${p.maxVoltage},${p.avgImbalance},${p.cycles},${p.criticalVEvents}\n`;
             });
 
             const blob = new Blob([csv], { type: 'text/csv' });
@@ -942,7 +928,7 @@
         }
 
         function downloadHistory() {
-            let csv = 'RFID,Config,Total_Readings,Last_Seen,Last_SoH,Last_Status,Total_Cycles\n';
+            let csv = 'Battery_ID,Config,Total_Readings,Last_Seen,Last_SoH,Last_Status,Total_Cycles\n';
             
             Object.entries(globalRegistry).forEach(([rfid, data]) => {
                 csv += `${rfid},${data.config}S,${data.readingCount},${new Date(data.lastSeen).toLocaleString()},${data.lastSoH}%,${data.lastStatus},${data.totalCycles}\n`;
