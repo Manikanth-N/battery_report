@@ -490,6 +490,30 @@
             }
         }
 
+        // Detect battery configuration from RFID
+        function detectConfig(rfid) {
+            // Try to extract XS pattern (e.g., 3S, 4S, 6S, 12S)
+            const match = rfid.match(/(\d+)S/i);
+            if (match) {
+                return parseInt(match[1]);
+            }
+            
+            // Fallback: try to detect from common patterns
+            if (rfid.includes('1S')) return 1;
+            if (rfid.includes('2S')) return 2;
+            if (rfid.includes('3S')) return 3;
+            if (rfid.includes('4S')) return 4;
+            if (rfid.includes('5S')) return 5;
+            if (rfid.includes('6S')) return 6;
+            if (rfid.includes('8S')) return 8;
+            if (rfid.includes('10S')) return 10;
+            if (rfid.includes('12S')) return 12;
+            
+            // Default fallback
+            console.warn(`Could not detect config for ${rfid}, defaulting to 4S`);
+            return 4;
+        }
+
         // Update registry display
         function updateRegistryDisplay() {
             const listEl = document.getElementById('registryList');
@@ -657,6 +681,7 @@
             const packs = {};
             const cellCols = ['C1', 'C2', 'C3', 'C4', 'C5', 'C6'];
             let newRFIDs = [];
+            let configDetections = {};
 
             analysisData.forEach(row => {
                 const rfid = row.RFID;
@@ -668,8 +693,11 @@
                 }
 
                 if (!packs[rfid]) {
-                    const config = parseInt(rfid.match(/(\d+)S/)?.[1] || 3);
+                    // Use improved config detection
+                    const config = detectConfig(rfid);
                     packs[rfid] = { readings: [], config };
+                    configDetections[rfid] = config;
+                    log(`🔍 Detected ${rfid}: ${config}S configuration`);
                 }
 
                 const voltages = cellCols.slice(0, packs[rfid].config)
