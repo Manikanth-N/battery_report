@@ -157,6 +157,12 @@
             background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
         }
 
+        .btn-upload {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            font-size: 1.2em;
+            padding: 20px 40px;
+        }
+
         .footer {
             background: rgba(255, 255, 255, 0.95);
             border-radius: 15px;
@@ -244,6 +250,27 @@
             left: 0;
             font-weight: bold;
         }
+
+        .upload-cta {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+
+        .upload-cta h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 2em;
+        }
+
+        .upload-cta p {
+            color: #7f8c8d;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
     </style>
 </head>
 <body>
@@ -257,6 +284,19 @@
                 <span class="badge badge-good">🟡 GOOD</span>
                 <span class="badge badge-fair">🟠 FAIR</span>
                 <span class="badge badge-poor">🔴 POOR</span>
+            </p>
+        </div>
+
+        <!-- Upload CTA -->
+        <div class="upload-cta">
+            <h2>📎 Upload Your Battery Data</h2>
+            <p>Drag & drop your CSV file or click below to analyze battery health instantly in your browser</p>
+            <a href="upload.html" class="btn btn-upload">
+                🚀 Start Analysis - Upload CSV
+            </a>
+            <p style="margin-top: 20px; font-size: 0.9em; color: #95a5a6;">
+                ✨ No server required - all processing happens in your browser!<br>
+                🔒 Your data stays private and secure on your device
             </p>
         </div>
 
@@ -288,35 +328,35 @@
         <div class="info-box">
             <h3>💡 How to Use This Dashboard</h3>
             <ul>
-                <li>Upload your CSV file containing RFID battery data with RTC timestamps</li>
+                <li>Click "Start Analysis" above to upload your CSV file with battery data</li>
                 <li>The system analyzes cell voltages, imbalance, degradation, and cycle counts</li>
-                <li>Interactive charts below show health status, trends, and risk factors</li>
-                <li>Click and drag to zoom, hover for details, download results as CSV</li>
-                <li>Dashboards update automatically when new data is processed</li>
+                <li>Interactive charts show health status, trends, and risk factors in real-time</li>
+                <li>All processing happens in your browser - no data leaves your device</li>
+                <li>Download comprehensive analysis results as CSV when complete</li>
             </ul>
         </div>
 
         <!-- Action Buttons -->
         <div class="action-buttons">
-            <a href="battery_health_results.csv" class="btn" download>
-                💾 Download Full Results CSV
+            <a href="upload.html" class="btn">
+                📎 Upload & Analyze New Data
+            </a>
+            <a href="battery_health_results.csv" class="btn btn-success" download>
+                💾 Download Previous Results
             </a>
             <a href="https://github.com/Manikanth-N/battery_report" class="btn btn-secondary" target="_blank">
                 👁️ View on GitHub
             </a>
-            <a href="critical_packs_detailed.csv" class="btn btn-success" download>
-                ⚠️ Download Critical Packs Log
-            </a>
         </div>
 
-        <!-- Main Dashboard -->
-        <div class="dashboard-card full-width-card">
+        <!-- Main Dashboard (only shown if data exists) -->
+        <div class="dashboard-card full-width-card" id="mainDashboard" style="display: none;">
             <h2>🔍 Battery Health Overview</h2>
             <iframe src="battery_health_dashboard.html"></iframe>
         </div>
 
-        <!-- Dashboard Grid -->
-        <div class="dashboard-grid">
+        <!-- Dashboard Grid (only shown if data exists) -->
+        <div class="dashboard-grid" id="dashboardGrid" style="display: none;">
             <div class="dashboard-card">
                 <h2>📊 Fleet Status & Distribution</h2>
                 <iframe src="status_overview.html"></iframe>
@@ -327,13 +367,13 @@
             </div>
         </div>
 
-        <!-- Detailed Dashboards -->
-        <div class="dashboard-card full-width-card">
+        <!-- Detailed Dashboards (only shown if data exists) -->
+        <div class="dashboard-card full-width-card" id="packExplorer" style="display: none;">
             <h2>🔍 Pack Performance Explorer</h2>
             <iframe src="pack_details.html"></iframe>
         </div>
 
-        <div class="dashboard-card full-width-card">
+        <div class="dashboard-card full-width-card" id="timeSeriesChart" style="display: none;">
             <h2>📈 Time Series Analysis</h2>
             <iframe src="time_series_analysis.html"></iframe>
         </div>
@@ -350,13 +390,54 @@
     </div>
 
     <script>
-        // Simulate loading stats (replace with actual data fetch in production)
-        setTimeout(() => {
-            document.getElementById('total-packs').textContent = '24';
-            document.getElementById('avg-soh').textContent = '78.5%';
-            document.getElementById('critical-packs').textContent = '3';
-            document.getElementById('total-readings').textContent = '1,247';
-        }, 500);
+        // Check if analysis files exist and show dashboards
+        async function checkForData() {
+            try {
+                const response = await fetch('battery_health_results.csv', { method: 'HEAD' });
+                if (response.ok) {
+                    document.getElementById('mainDashboard').style.display = 'block';
+                    document.getElementById('dashboardGrid').style.display = 'grid';
+                    document.getElementById('packExplorer').style.display = 'block';
+                    document.getElementById('timeSeriesChart').style.display = 'block';
+                    
+                    // Try to load and display stats
+                    loadStats();
+                }
+            } catch (e) {
+                console.log('No previous analysis found - ready for new upload');
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch('battery_health_results.csv');
+                const text = await response.text();
+                const lines = text.split('\n');
+                const dataLines = lines.slice(1).filter(l => l.trim());
+                
+                document.getElementById('total-packs').textContent = dataLines.length;
+                
+                // Parse SoH values
+                const sohValues = dataLines.map(line => {
+                    const cols = line.split(',');
+                    return parseFloat(cols[6] || 0); // Assuming SoH is in column 6
+                }).filter(v => !isNaN(v));
+                
+                const avgSoh = (sohValues.reduce((a, b) => a + b, 0) / sohValues.length).toFixed(1);
+                document.getElementById('avg-soh').textContent = avgSoh + '%';
+                
+                const criticalPacks = sohValues.filter(v => v < 70).length;
+                document.getElementById('critical-packs').textContent = criticalPacks;
+                
+                // Placeholder for total readings
+                document.getElementById('total-readings').textContent = '1,247';
+            } catch (e) {
+                console.log('Could not load stats');
+            }
+        }
+
+        // Check on page load
+        checkForData();
 
         // Add loading indicators for iframes
         document.querySelectorAll('iframe').forEach(iframe => {
